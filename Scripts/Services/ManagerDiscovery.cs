@@ -14,7 +14,7 @@ namespace OddSockets.Unity
     public class ManagerDiscovery
     {
         private static ManagerDiscovery _instance;
-        private readonly string _managerUrl = "https://manager1.oddsockets.tyga.network";
+        private readonly string _managerUrl = "https://connect.oddsockets.tyga.network";
 
         /// <summary>
         /// Singleton instance of the ManagerDiscovery service.
