@@ -1,0 +1,17 @@
+{
+    "name": "OddSockets.Unity",
+    "rootNamespace": "OddSockets.Unity",
+    "references": [
+        "Unity.Nuget.Newtonsoft-Json",
+        "SocketIOUnityAssembly"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
