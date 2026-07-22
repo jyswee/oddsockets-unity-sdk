@@ -1,0 +1,45 @@
+OddSockets Unity SDK - Live Two-Client Round-Trip PROOF
+========================================================
+
+What this proves
+----------------
+Two INDEPENDENT OddSocketsClient connections were stood up against the LIVE
+OddSockets platform:
+
+  - alice : subscriber
+  - bob   : publisher
+
+bob publishes a message tagged with a random nonce; alice receives it on her
+subscription. Because alice and bob are separate connections, delivery can only
+have crossed the assigned live worker - so a pass is an honest end-to-end
+regression, not a local echo.
+
+How it was run (true headless, no GUI)
+--------------------------------------
+  Unity 6000.0.79f1
+  ODDSOCKETS_API_KEY=<live key> \
+  Unity -batchmode -nographics -projectPath . \
+        -runTests -testPlatform PlayMode \
+        -testResults results.xml -logFile editor.log
+
+Result
+------
+  NUnit result : Passed
+  Duration     : 4.97s
+
+Live trace (from editor.log)
+----------------------------
+  [rig] connected alice=Connected bob=Connected
+  [rig] alice subscribed to rig-84485a1f
+  [rig] bob published nonce=b6816e3335a54bffb41f7ab9dd8563c9
+  [rig] alice RECEIVED nonce=b6816e3335a54bffb41f7ab9dd8563c9 on channel=rig-84485a1f
+  [rig] round-trip received=True
+
+Path exercised end-to-end
+-------------------------
+  1. Manager discovery  -> https://connect.oddsockets.tyga.network
+  2. Worker assignment  -> GET /api/cluster/select-worker?apiKey=&userId=&clientIdentifier=
+  3. Socket.IO connect  -> assigned worker (WebSocket, auth {apiKey, userId})
+  4. subscribe          -> ack "subscribed"
+  5. publish (bob)      -> worker broadcast "message"
+  6. deliver (alice)    -> nonce match confirmed
