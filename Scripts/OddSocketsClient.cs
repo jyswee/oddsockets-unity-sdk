@@ -5,6 +5,7 @@ using UnityEngine;
 using SocketIOClient;
 using SocketIOClient.Newtonsoft.Json;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace OddSockets.Unity
 {
@@ -38,6 +39,14 @@ namespace OddSockets.Unity
         private int reconnectDelay = 1000; // Start with 1 second
         private string clientIdentifier;
         private SessionInfo sessionInfo;
+        private OddSocketsEnhancedFeatures enhanced;
+
+        // Custom server->client event listeners registered via On(). Kept
+        // independent of the socket instance so they survive reconnects: a new
+        // SocketIOUnity is created on every (re)connect, and AttachCustomListeners
+        // re-binds them to the fresh socket in SetupSocketEventHandlers.
+        private readonly Dictionary<string, Action<JToken>> customListeners
+            = new Dictionary<string, Action<JToken>>();
 
         /// <summary>
         /// Current connection state
@@ -246,6 +255,106 @@ namespace OddSockets.Unity
             }
 
             return results.ToArray();
+        }
+
+        /// <summary>
+        /// Enhanced features (reactions, threads, message editing, read receipts,
+        /// presence/status, file uploads, direct messages, notifications, channel
+        /// management) backed by the worker's enhanced event handlers.
+        /// </summary>
+        public OddSocketsEnhancedFeatures Enhanced
+            => enhanced ?? (enhanced = new OddSocketsEnhancedFeatures(this));
+
+        /// <summary>
+        /// Emit a raw event to the worker. Use this to reach any worker event
+        /// (including the enhanced-feature events) directly. The higher-level
+        /// <see cref="Enhanced"/> API wraps the common ones with typed helpers.
+        /// </summary>
+        /// <param name="eventName">Socket.IO event name (e.g. "add_reaction").</param>
+        /// <param name="data">Payload object; serialized with Newtonsoft.</param>
+        public async Task EmitAsync(string eventName, object data)
+        {
+            if (string.IsNullOrWhiteSpace(eventName))
+            {
+                throw new ArgumentException("Event name must be a non-empty string", nameof(eventName));
+            }
+
+            if (!IsConnected())
+            {
+                throw new InvalidOperationException("Not connected to OddSockets");
+            }
+
+            await socket.EmitAsync(eventName, data ?? new { });
+        }
+
+        /// <summary>
+        /// Listen for a raw server-emitted event. The payload is delivered as a
+        /// Newtonsoft <see cref="JToken"/> (the idiomatic type for Unity, since
+        /// enhanced-event shapes vary). Listeners survive reconnects.
+        /// </summary>
+        /// <param name="eventName">Socket.IO event name (e.g. "reaction_added").</param>
+        /// <param name="handler">Callback invoked with the event payload.</param>
+        public void On(string eventName, Action<JToken> handler)
+        {
+            if (string.IsNullOrWhiteSpace(eventName))
+            {
+                throw new ArgumentException("Event name must be a non-empty string", nameof(eventName));
+            }
+            if (handler == null)
+            {
+                throw new ArgumentNullException(nameof(handler));
+            }
+
+            bool alreadyBound = customListeners.ContainsKey(eventName);
+            customListeners[eventName] = alreadyBound
+                ? customListeners[eventName] + handler
+                : handler;
+
+            // Bind on the live socket now; on the first listener for this event
+            // only (subsequent handlers are chained into the same delegate, so we
+            // must not bind the socket dispatch twice).
+            if (!alreadyBound && socket != null)
+            {
+                BindCustomListener(eventName);
+            }
+        }
+
+        /// <summary>
+        /// Remove all handlers previously registered for an event via <see cref="On"/>.
+        /// </summary>
+        public void Off(string eventName)
+        {
+            if (string.IsNullOrWhiteSpace(eventName)) return;
+            customListeners.Remove(eventName);
+            socket?.Off(eventName);
+        }
+
+        /// <summary>
+        /// Internal: (re)bind all custom listeners to the current socket. Called
+        /// from SetupSocketEventHandlers on every (re)connect so listeners
+        /// registered before/across reconnects reach the fresh socket instance.
+        /// </summary>
+        private void AttachCustomListeners()
+        {
+            foreach (var eventName in customListeners.Keys)
+            {
+                BindCustomListener(eventName);
+            }
+        }
+
+        private void BindCustomListener(string eventName)
+        {
+            socket.On(eventName, response =>
+            {
+                JToken payload = null;
+                try { payload = response.GetValue<JToken>(); }
+                catch { /* payload-less events deliver null */ }
+
+                if (customListeners.TryGetValue(eventName, out var handler))
+                {
+                    handler?.Invoke(payload);
+                }
+            });
         }
 
         /// <summary>
@@ -468,6 +577,9 @@ namespace OddSockets.Unity
                     channels[historyData.Channel].HandleHistory(historyData);
                 }
             });
+
+            // Re-bind any enhanced-feature / custom listeners to this fresh socket.
+            AttachCustomListeners();
         }
 
         /// <summary>
