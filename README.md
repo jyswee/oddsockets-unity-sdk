@@ -2,6 +2,8 @@
 
 Official Unity SDK for OddSockets real-time messaging platform. C# MonoBehaviour components for pub/sub, presence, message history.
 
+OddSockets - A division of Tyga.Cloud Ltd
+
 ## Install
 
 Copy the `Scripts/` folder into your Unity project's `Assets/` directory.

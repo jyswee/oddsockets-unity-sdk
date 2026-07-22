@@ -112,13 +112,12 @@ namespace OddSockets.Unity
                 {
                     subscribed = true;
                     subscribing = false;
-                    
+
                     if (messageCallback != null)
                     {
                         OnMessage += messageCallback;
                     }
 
-                    OnSubscribed?.Invoke(data);
                     tcs.TrySetResult(true);
                 }
             }
@@ -187,7 +186,6 @@ namespace OddSockets.Unity
                     subscribed = false;
                     OnMessage = null; // Clear all message listeners
 
-                    OnUnsubscribed?.Invoke(data);
                     tcs.TrySetResult(true);
                 }
             }
@@ -245,7 +243,6 @@ namespace OddSockets.Unity
             {
                 if (data.Channel == name)
                 {
-                    OnPublished?.Invoke(data);
                     tcs.TrySetResult(data);
                 }
             }
@@ -302,7 +299,6 @@ namespace OddSockets.Unity
             {
                 if (data.Channel == name)
                 {
-                    OnHistory?.Invoke(data);
                     tcs.TrySetResult(data.Messages ?? new ChannelMessageData[0]);
                 }
             }
@@ -358,7 +354,6 @@ namespace OddSockets.Unity
             {
                 if (data.Channel == name)
                 {
-                    OnPresence?.Invoke(data);
                     tcs.TrySetResult(data);
                 }
             }

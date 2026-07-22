@@ -131,90 +131,6 @@ namespace OddSockets.Unity
     }
 
     /// <summary>
-    /// Represents a bulk message for batch publishing.
-    /// </summary>
-    [Serializable]
-    public class BulkMessage
-    {
-        [SerializeField] private string channel;
-        [SerializeField] private object message;
-        [SerializeField] private PublishOptions options;
-
-        /// <summary>
-        /// The channel to publish to.
-        /// </summary>
-        public string Channel => channel;
-
-        /// <summary>
-        /// The message to publish.
-        /// </summary>
-        public object Message => message;
-
-        /// <summary>
-        /// Publishing options.
-        /// </summary>
-        public PublishOptions Options => options;
-
-        /// <summary>
-        /// Creates a new BulkMessage.
-        /// </summary>
-        public BulkMessage(string channel, object message, PublishOptions options = null)
-        {
-            this.channel = channel;
-            this.message = message;
-            this.options = options ?? new PublishOptions();
-        }
-    }
-
-    /// <summary>
-    /// Options for publishing messages.
-    /// </summary>
-    [Serializable]
-    public class PublishOptions
-    {
-        [SerializeField] private int ttl;
-        [SerializeField] private Dictionary<string, object> metadata;
-        [SerializeField] private bool storeInHistory = true;
-
-        /// <summary>
-        /// Time to live in seconds (0 = no expiration).
-        /// </summary>
-        public int TTL
-        {
-            get => ttl;
-            set => ttl = value;
-        }
-
-        /// <summary>
-        /// Additional message metadata.
-        /// </summary>
-        public Dictionary<string, object> Metadata
-        {
-            get => metadata ?? (metadata = new Dictionary<string, object>());
-            set => metadata = value;
-        }
-
-        /// <summary>
-        /// Whether to store this message in channel history.
-        /// </summary>
-        public bool StoreInHistory
-        {
-            get => storeInHistory;
-            set => storeInHistory = value;
-        }
-
-        /// <summary>
-        /// Creates new PublishOptions.
-        /// </summary>
-        public PublishOptions(int ttl = 0, Dictionary<string, object> metadata = null, bool storeInHistory = true)
-        {
-            this.ttl = ttl;
-            this.metadata = metadata;
-            this.storeInHistory = storeInHistory;
-        }
-    }
-
-    /// <summary>
     /// Result of a bulk publish operation.
     /// </summary>
     [Serializable]
@@ -251,54 +167,6 @@ namespace OddSockets.Unity
     }
 
     /// <summary>
-    /// Subscription options for channels.
-    /// </summary>
-    [Serializable]
-    public class SubscriptionOptions
-    {
-        [SerializeField] private int maxHistory = 100;
-        [SerializeField] private bool retainHistory = true;
-        [SerializeField] private bool enablePresence = false;
-
-        /// <summary>
-        /// Maximum number of history messages to retain.
-        /// </summary>
-        public int MaxHistory
-        {
-            get => maxHistory;
-            set => maxHistory = value;
-        }
-
-        /// <summary>
-        /// Whether to retain message history locally.
-        /// </summary>
-        public bool RetainHistory
-        {
-            get => retainHistory;
-            set => retainHistory = value;
-        }
-
-        /// <summary>
-        /// Whether to enable presence tracking.
-        /// </summary>
-        public bool EnablePresence
-        {
-            get => enablePresence;
-            set => enablePresence = value;
-        }
-
-        /// <summary>
-        /// Creates new SubscriptionOptions.
-        /// </summary>
-        public SubscriptionOptions(int maxHistory = 100, bool retainHistory = true, bool enablePresence = false)
-        {
-            this.maxHistory = maxHistory;
-            this.retainHistory = retainHistory;
-            this.enablePresence = enablePresence;
-        }
-    }
-
-    /// <summary>
     /// Presence information for a channel.
     /// </summary>
     [Serializable]
@@ -331,42 +199,6 @@ namespace OddSockets.Unity
             this.channel = channel;
             this.occupancy = occupancy;
             this.occupants = occupants ?? new List<PresenceUser>();
-        }
-    }
-
-    /// <summary>
-    /// Represents a user in presence information.
-    /// </summary>
-    [Serializable]
-    public class PresenceUser
-    {
-        [SerializeField] private string userId;
-        [SerializeField] private Dictionary<string, object> state;
-        [SerializeField] private DateTime joinedAt;
-
-        /// <summary>
-        /// The user ID.
-        /// </summary>
-        public string UserId => userId;
-
-        /// <summary>
-        /// User state data.
-        /// </summary>
-        public Dictionary<string, object> State => state ?? new Dictionary<string, object>();
-
-        /// <summary>
-        /// When the user joined the channel.
-        /// </summary>
-        public DateTime JoinedAt => joinedAt;
-
-        /// <summary>
-        /// Creates a new PresenceUser.
-        /// </summary>
-        public PresenceUser(string userId, Dictionary<string, object> state = null, DateTime? joinedAt = null)
-        {
-            this.userId = userId;
-            this.state = state ?? new Dictionary<string, object>();
-            this.joinedAt = joinedAt ?? DateTime.UtcNow;
         }
     }
 }

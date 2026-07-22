@@ -257,22 +257,14 @@ namespace OddSockets.Unity
             {
                 // Discover the optimal manager URL automatically
                 var managerUrl = await ManagerDiscovery.Instance.DiscoverManagerUrlAsync(config.ApiKey);
-                var selectWorkerUrl = $"{managerUrl}/api/cluster/select-worker";
+                var userId = config.UserId ?? clientIdentifier;
+                var selectWorkerUrl = $"{managerUrl}/api/cluster/select-worker" +
+                    $"?apiKey={UnityEngine.Networking.UnityWebRequest.EscapeURL(config.ApiKey)}" +
+                    $"&userId={UnityEngine.Networking.UnityWebRequest.EscapeURL(userId)}" +
+                    $"&clientIdentifier={UnityEngine.Networking.UnityWebRequest.EscapeURL(clientIdentifier)}";
 
-                var requestData = new
+                using (var www = UnityEngine.Networking.UnityWebRequest.Get(selectWorkerUrl))
                 {
-                    apiKey = config.ApiKey,
-                    userId = config.UserId ?? clientIdentifier,
-                    clientIdentifier = clientIdentifier
-                };
-
-                using (var www = new UnityEngine.Networking.UnityWebRequest(selectWorkerUrl, "GET"))
-                {
-                    var json = JsonConvert.SerializeObject(requestData);
-                    var bodyRaw = System.Text.Encoding.UTF8.GetBytes(json);
-                    www.uploadHandler = new UnityEngine.Networking.UploadHandlerRaw(bodyRaw);
-                    www.downloadHandler = new UnityEngine.Networking.DownloadHandlerBuffer();
-                    www.SetRequestHeader("Content-Type", "application/json");
                     www.SetRequestHeader("User-Agent", "OddSockets-Unity-SDK/1.0.0");
                     www.timeout = config.Timeout;
 
@@ -341,19 +333,28 @@ namespace OddSockets.Unity
                     ["userId"] = config.UserId ?? clientIdentifier
                 },
                 Transport = SocketIOClient.Transport.TransportProtocol.WebSocket,
-                Timeout = TimeSpan.FromSeconds(config.Timeout)
+                ConnectionTimeout = TimeSpan.FromSeconds(config.Timeout)
             });
+
+            // Configure the wire (de)serializer. The default System.Text.Json options
+            // are case-sensitive, ignore public fields, and honour neither Newtonsoft's
+            // [JsonProperty] attributes nor Unity's bundled JSON conventions - so inbound
+            // event payloads silently deserialize to null. Use the Newtonsoft serializer
+            // instead: it respects the [JsonProperty] names on the data classes and
+            // exposes free-form message bodies as navigable JToken objects, which is the
+            // idiomatic type for Unity consumers (Newtonsoft is Unity's bundled JSON).
+            socket.JsonSerializer = new SocketIOClient.Newtonsoft.Json.NewtonsoftJsonSerializer();
 
             SetupSocketEventHandlers();
 
             var tcs = new TaskCompletionSource<bool>();
 
-            void OnConnect()
+            void OnConnect(object sender, EventArgs e)
             {
                 tcs.TrySetResult(true);
             }
 
-            void OnConnectError(string error)
+            void OnConnectError(object sender, string error)
             {
                 tcs.TrySetException(new Exception($"Failed to connect to worker: {error}"));
             }
@@ -386,7 +387,7 @@ namespace OddSockets.Unity
             if (socket == null) return;
 
             // Handle disconnection
-            socket.OnDisconnected += (reason) =>
+            socket.OnDisconnected += (sender, reason) =>
             {
                 connectionState = ConnectionState.Disconnected;
                 OnDisconnected?.Invoke(reason);
@@ -399,7 +400,7 @@ namespace OddSockets.Unity
             };
 
             // Handle errors
-            socket.OnError += (error) =>
+            socket.OnError += (sender, error) =>
             {
                 OnError?.Invoke(new Exception(error));
             };
@@ -408,7 +409,7 @@ namespace OddSockets.Unity
             socket.On("message", (data) =>
             {
                 var messageData = data.GetValue<ChannelMessageData>();
-                if (channels.ContainsKey(messageData.Channel))
+                if (messageData?.Channel != null && channels.ContainsKey(messageData.Channel))
                 {
                     channels[messageData.Channel].HandleMessage(messageData);
                 }
@@ -417,7 +418,7 @@ namespace OddSockets.Unity
             socket.On("subscribed", (data) =>
             {
                 var subData = data.GetValue<ChannelSubscriptionData>();
-                if (channels.ContainsKey(subData.Channel))
+                if (subData?.Channel != null && channels.ContainsKey(subData.Channel))
                 {
                     channels[subData.Channel].HandleSubscribed(subData);
                 }
