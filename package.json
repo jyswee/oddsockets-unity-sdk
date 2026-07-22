@@ -1,0 +1,40 @@
+{
+  "name": "com.oddsockets.unity",
+  "version": "1.0.0",
+  "displayName": "OddSockets Realtime",
+  "description": "Realtime messaging for Unity: pub/sub channels, presence, and a full enhanced-feature surface (reactions, threads, typing indicators, read receipts, direct messages, notifications). Backed by the OddSockets managed worker fleet.\n\nOddSockets - A division of Tyga.Cloud Ltd",
+  "unity": "2021.3",
+  "documentationUrl": "https://oddsockets.ai/docs",
+  "changelogUrl": "https://oddsockets.ai/docs",
+  "licensesUrl": "https://oddsockets.ai",
+  "keywords": [
+    "realtime",
+    "websocket",
+    "socket.io",
+    "networking",
+    "messaging",
+    "chat",
+    "presence",
+    "multiplayer",
+    "pubsub"
+  ],
+  "author": {
+    "name": "OddSockets - A division of Tyga.Cloud Ltd",
+    "url": "https://oddsockets.ai"
+  },
+  "dependencies": {
+    "com.unity.nuget.newtonsoft-json": "3.2.1"
+  },
+  "samples": [
+    {
+      "displayName": "Basic Usage",
+      "description": "Connect, subscribe to a channel, and publish a message.",
+      "path": "Samples~/BasicUsage"
+    },
+    {
+      "displayName": "Two-Client Round Trip",
+      "description": "Two independent clients proving an end-to-end publish/subscribe round trip through the worker.",
+      "path": "Samples~/TwoClientDemo"
+    }
+  ]
+}
