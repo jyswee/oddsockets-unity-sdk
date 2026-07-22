@@ -11,14 +11,15 @@ Copy the `Scripts/` folder into your Unity project's `Assets/` directory.
 ```csharp
 // Attach OddSocketsClient to a GameObject
 var client = gameObject.AddComponent<OddSocketsClient>();
-client.Initialize(new OddSocketsConfig { ApiKey = "YOUR_API_KEY", UserId = "my-agent" });
-client.ConnectAsync();
+client.Initialize(new OddSocketsUnityConfig { ApiKey = "YOUR_API_KEY", UserId = "my-agent" });
+await client.ConnectAsync();
 
-var channel = client.GetChannel("my-channel");
-channel.OnMessage.AddListener((msg) => Debug.Log($"Received: {msg}"));
-channel.SubscribeAsync();
-channel.PublishAsync("{\"text\":\"Hello from Unity\"}");
+var channel = client.Channel("my-channel");
+await channel.SubscribeAsync(msg => Debug.Log($"Received: {msg.Message}"));
+await channel.PublishAsync(new { text = "Hello from Unity" });
 ```
+
+Call the async methods from an `async` context (for example an `async void Start`).
 
 ## Get a Free API Key
 
