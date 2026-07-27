@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using UnityEngine;
@@ -48,6 +49,14 @@ namespace OddSockets.Unity
         private readonly Dictionary<string, Action<JToken>> customListeners
             = new Dictionary<string, Action<JToken>>();
 
+        // SocketIOUnity fires its On(...) event handlers on a background receive
+        // thread. Unity API calls (GameObject/Component access) are only legal on
+        // the main thread, so user callbacks (channel + enhanced events) must be
+        // marshaled there. Handlers enqueue here; Update() drains on the main
+        // thread. BUG-2026-0723-0007.
+        private readonly ConcurrentQueue<Action> mainThreadQueue
+            = new ConcurrentQueue<Action>();
+
         /// <summary>
         /// Current connection state
         /// </summary>
@@ -96,6 +105,41 @@ namespace OddSockets.Unity
         private void OnDestroy()
         {
             Disconnect();
+        }
+
+        private void Update()
+        {
+            // Drain callbacks marshaled off the SocketIOUnity background receive
+            // thread. Running them here guarantees user handlers execute on Unity's
+            // main thread, so touching GameObject/Component APIs is legal.
+            // BUG-2026-0723-0007. Each queued action already carries its own
+            // try/catch (see DispatchToMainThread), so one throwing handler can
+            // never stall the drain or the game loop.
+            while (mainThreadQueue.TryDequeue(out var action))
+            {
+                action();
+            }
+        }
+
+        /// <summary>
+        /// Internal: marshal a server-event handler onto the main thread. The
+        /// action is wrapped so a throw inside a user callback is logged (with
+        /// context) instead of being silently swallowed. BUG-2026-0723-0008.
+        /// </summary>
+        private void DispatchToMainThread(string context, Action action)
+        {
+            mainThreadQueue.Enqueue(() =>
+            {
+                try
+                {
+                    action();
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogException(new Exception(
+                        $"[OddSockets] Unhandled exception in '{context}' handler: {ex.Message}", ex));
+                }
+            });
         }
 
         /// <summary>
@@ -346,14 +390,20 @@ namespace OddSockets.Unity
         {
             socket.On(eventName, response =>
             {
-                JToken payload = null;
-                try { payload = response.GetValue<JToken>(); }
-                catch { /* payload-less events deliver null */ }
-
-                if (customListeners.TryGetValue(eventName, out var handler))
+                // Runs on the background receive thread; marshal the user handler
+                // to the main thread so enhanced-feature callbacks can touch Unity
+                // APIs, and so a throw is logged rather than swallowed.
+                DispatchToMainThread(eventName, () =>
                 {
-                    handler?.Invoke(payload);
-                }
+                    JToken payload = null;
+                    try { payload = response.GetValue<JToken>(); }
+                    catch { /* payload-less events deliver null */ }
+
+                    if (customListeners.TryGetValue(eventName, out var handler))
+                    {
+                        handler?.Invoke(payload);
+                    }
+                });
             });
         }
 
@@ -514,68 +564,93 @@ namespace OddSockets.Unity
                 OnError?.Invoke(new Exception(error));
             };
 
-            // Forward channel-related events to appropriate channels
+            // Forward channel-related events to the appropriate channels. Each
+            // handler fires on the SocketIOUnity background thread, so the actual
+            // channel delivery (and thus the user callback) is marshaled onto the
+            // main thread via DispatchToMainThread. Deserialization is done inside
+            // the marshaled action so a malformed payload is caught-and-logged too.
             socket.On("message", (data) =>
             {
-                var messageData = data.GetValue<ChannelMessageData>();
-                if (messageData?.Channel != null && channels.ContainsKey(messageData.Channel))
+                DispatchToMainThread("message", () =>
                 {
-                    channels[messageData.Channel].HandleMessage(messageData);
-                }
+                    var messageData = data.GetValue<ChannelMessageData>();
+                    if (messageData?.Channel != null && channels.ContainsKey(messageData.Channel))
+                    {
+                        channels[messageData.Channel].HandleMessage(messageData);
+                    }
+                });
             });
 
             socket.On("subscribed", (data) =>
             {
-                var subData = data.GetValue<ChannelSubscriptionData>();
-                if (subData?.Channel != null && channels.ContainsKey(subData.Channel))
+                DispatchToMainThread("subscribed", () =>
                 {
-                    channels[subData.Channel].HandleSubscribed(subData);
-                }
+                    var subData = data.GetValue<ChannelSubscriptionData>();
+                    if (subData?.Channel != null && channels.ContainsKey(subData.Channel))
+                    {
+                        channels[subData.Channel].HandleSubscribed(subData);
+                    }
+                });
             });
 
             socket.On("unsubscribed", (data) =>
             {
-                var unsubData = data.GetValue<ChannelSubscriptionData>();
-                if (channels.ContainsKey(unsubData.Channel))
+                DispatchToMainThread("unsubscribed", () =>
                 {
-                    channels[unsubData.Channel].HandleUnsubscribed(unsubData);
-                }
+                    var unsubData = data.GetValue<ChannelSubscriptionData>();
+                    if (unsubData?.Channel != null && channels.ContainsKey(unsubData.Channel))
+                    {
+                        channels[unsubData.Channel].HandleUnsubscribed(unsubData);
+                    }
+                });
             });
 
             socket.On("published", (data) =>
             {
-                var pubData = data.GetValue<ChannelPublishData>();
-                if (channels.ContainsKey(pubData.Channel))
+                DispatchToMainThread("published", () =>
                 {
-                    channels[pubData.Channel].HandlePublished(pubData);
-                }
+                    var pubData = data.GetValue<ChannelPublishData>();
+                    if (pubData?.Channel != null && channels.ContainsKey(pubData.Channel))
+                    {
+                        channels[pubData.Channel].HandlePublished(pubData);
+                    }
+                });
             });
 
             socket.On("presence", (data) =>
             {
-                var presenceData = data.GetValue<ChannelPresenceData>();
-                if (channels.ContainsKey(presenceData.Channel))
+                DispatchToMainThread("presence", () =>
                 {
-                    channels[presenceData.Channel].HandlePresence(presenceData);
-                }
+                    var presenceData = data.GetValue<ChannelPresenceData>();
+                    if (presenceData?.Channel != null && channels.ContainsKey(presenceData.Channel))
+                    {
+                        channels[presenceData.Channel].HandlePresence(presenceData);
+                    }
+                });
             });
 
             socket.On("presence_change", (data) =>
             {
-                var presenceChangeData = data.GetValue<ChannelPresenceChangeData>();
-                if (channels.ContainsKey(presenceChangeData.Channel))
+                DispatchToMainThread("presence_change", () =>
                 {
-                    channels[presenceChangeData.Channel].HandlePresenceChange(presenceChangeData);
-                }
+                    var presenceChangeData = data.GetValue<ChannelPresenceChangeData>();
+                    if (presenceChangeData?.Channel != null && channels.ContainsKey(presenceChangeData.Channel))
+                    {
+                        channels[presenceChangeData.Channel].HandlePresenceChange(presenceChangeData);
+                    }
+                });
             });
 
             socket.On("history", (data) =>
             {
-                var historyData = data.GetValue<ChannelHistoryData>();
-                if (channels.ContainsKey(historyData.Channel))
+                DispatchToMainThread("history", () =>
                 {
-                    channels[historyData.Channel].HandleHistory(historyData);
-                }
+                    var historyData = data.GetValue<ChannelHistoryData>();
+                    if (historyData?.Channel != null && channels.ContainsKey(historyData.Channel))
+                    {
+                        channels[historyData.Channel].HandleHistory(historyData);
+                    }
+                });
             });
 
             // Re-bind any enhanced-feature / custom listeners to this fresh socket.
