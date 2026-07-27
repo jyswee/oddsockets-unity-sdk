@@ -297,7 +297,12 @@ namespace OddSockets.Unity
 
             void OnHistoryHandler(ChannelHistoryData data)
             {
-                if (data.Channel == name)
+                // The worker emits "history" both as the explicit get_history
+                // RESPONSE (query:true) and as a fire-and-forget on-join snapshot
+                // (~10 msgs, no query flag). Only the query:true response may
+                // resolve this request; ignore the snapshot so it can't return
+                // the wrong data. BUG-2026-0727-0012.
+                if (data.Channel == name && data.Query)
                 {
                     tcs.TrySetResult(data.Messages ?? new ChannelMessageData[0]);
                 }

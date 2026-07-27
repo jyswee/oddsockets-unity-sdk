@@ -776,6 +776,9 @@ namespace OddSockets.Unity
         [JsonProperty("channel")] public string Channel;
         [JsonProperty("messages")] public ChannelMessageData[] Messages;
         [JsonProperty("count")] public int Count;
+        // True only on the explicit get_history RESPONSE; the on-join snapshot
+        // omits it (defaults to false). See BUG-2026-0727-0012.
+        [JsonProperty("query")] public bool Query;
     }
 
     [Serializable]
