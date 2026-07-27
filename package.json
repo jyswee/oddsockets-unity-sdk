@@ -1,6 +1,6 @@
 {
   "name": "com.oddsockets.unity",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "displayName": "OddSockets Realtime",
   "description": "Realtime messaging for Unity: pub/sub channels, presence, and a full enhanced-feature surface (reactions, threads, typing indicators, read receipts, direct messages, notifications). Backed by the OddSockets managed worker fleet.\n\nOddSockets - A division of Tyga.Cloud Ltd",
   "unity": "2021.3",
