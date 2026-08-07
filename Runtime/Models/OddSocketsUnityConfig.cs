@@ -16,6 +16,11 @@ namespace OddSockets.Unity
         [Tooltip("User identifier (auto-generated if empty)")]
         public string UserId;
 
+        [Tooltip("Manager URL. Leave empty to use the ODDSOCKETS_MANAGER_URL environment " +
+                 "variable, or the public endpoint when that is unset. A URL set here is " +
+                 "always used verbatim; the client never falls back to the public endpoint.")]
+        public string ManagerUrl;
+
         [Tooltip("Automatically connect on initialization")]
         public bool AutoConnect = true;
 
@@ -47,6 +52,10 @@ namespace OddSockets.Unity
                 throw new System.ArgumentException("API key is required", nameof(ApiKey));
             }
 
+            // Resolve now so a bad manager URL is rejected at Initialize() instead of
+            // surfacing much later as an obscure connection failure.
+            ManagerDiscovery.ResolveManagerUrl(ManagerUrl);
+
             if (Timeout <= 0)
             {
                 throw new System.ArgumentException("Timeout must be greater than 0", nameof(Timeout));
@@ -73,6 +82,7 @@ namespace OddSockets.Unity
             {
                 ApiKey = ApiKey,
                 UserId = UserId,
+                ManagerUrl = ManagerUrl,
                 AutoConnect = AutoConnect,
                 ReconnectAttempts = ReconnectAttempts,
                 Timeout = Timeout,
