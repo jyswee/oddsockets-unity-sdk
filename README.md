@@ -47,6 +47,28 @@ await channel.PublishAsync(new { text = "Hello from Unity" });
 
 Call the async methods from an `async` context (for example an `async void Start`).
 
+## Manager URL
+
+The manager URL is resolved in this order:
+
+1. `OddSocketsUnityConfig.ManagerUrl` (also editable in the inspector)
+2. the `ODDSOCKETS_MANAGER_URL` environment variable
+3. `https://connect.oddsockets.tyga.network`
+
+It must be an absolute `http://` or `https://` URL, otherwise `Initialize` throws
+`ArgumentException` with the message `Invalid managerUrl: <value>`. Point it at a
+self-hosted or staging manager and the SDK will use that endpoint and nothing else: if it
+is unreachable the connection fails with the underlying error rather than falling back to
+the public endpoint.
+
+```csharp
+client.Initialize(new OddSocketsUnityConfig
+{
+    ApiKey = "YOUR_API_KEY",
+    ManagerUrl = "https://manager.internal.example.com"
+});
+```
+
 ## Enhanced Features
 
 Everything beyond core pub/sub is on `client.Enhanced`. Wire the event you care

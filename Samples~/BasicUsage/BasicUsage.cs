@@ -526,10 +526,20 @@ namespace OddSockets.Unity.Examples
                 return;
             }
 
-            var isReachable = await ManagerDiscovery.Instance.TestConnectivityAsync(client.Config.ApiKey);
-            Debug.Log($"Manager reachable: {isReachable}");
+            var managerUrl = ManagerDiscovery.ResolveManagerUrl(client.Config.ManagerUrl);
 
-            var managerInfo = await ManagerDiscovery.Instance.GetManagerInfoAsync(client.Config.ApiKey);
+            try
+            {
+                await ManagerDiscovery.Instance.VerifyConnectivityAsync(client.Config.ApiKey, client.Config.ManagerUrl);
+                Debug.Log($"Manager reachable: {managerUrl}");
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"Manager unreachable: {ex.Message}");
+                return;
+            }
+
+            var managerInfo = await ManagerDiscovery.Instance.GetManagerInfoAsync(client.Config.ApiKey, client.Config.ManagerUrl);
             if (managerInfo != null)
             {
                 Debug.Log($"Manager info: {managerInfo.Version}, Status: {managerInfo.Status}, Workers: {managerInfo.ActiveWorkers}");

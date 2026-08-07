@@ -414,8 +414,8 @@ namespace OddSockets.Unity
         {
             try
             {
-                // Discover the optimal manager URL automatically
-                var managerUrl = await ManagerDiscovery.Instance.DiscoverManagerUrlAsync(config.ApiKey);
+                // Use the manager this client was configured for, never a substitute
+                var managerUrl = await ManagerDiscovery.Instance.DiscoverManagerUrlAsync(config.ApiKey, config.ManagerUrl);
                 var userId = config.UserId ?? clientIdentifier;
                 var selectWorkerUrl = $"{managerUrl}/api/cluster/select-worker" +
                     $"?apiKey={UnityEngine.Networking.UnityWebRequest.EscapeURL(config.ApiKey)}" +
@@ -464,10 +464,11 @@ namespace OddSockets.Unity
             }
             catch (Exception error)
             {
-                // If manager is offline, try fallback logic
+                // The configured manager is the only manager: report the failure rather
+                // than quietly connecting somewhere else.
                 if (error.Message.Contains("ECONNREFUSED") || error.Message.Contains("ENOTFOUND"))
                 {
-                    throw new Exception("Manager is offline. Cannot assign worker without session stickiness.");
+                    throw new Exception($"Manager {ManagerDiscovery.ResolveManagerUrl(config.ManagerUrl)} is unreachable. Cannot assign worker without session stickiness.", error);
                 }
                 throw;
             }

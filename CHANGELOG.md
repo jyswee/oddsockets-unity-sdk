@@ -3,6 +3,25 @@
 All notable changes to the OddSockets Realtime Unity SDK are documented here.
 This project adheres to [Semantic Versioning](https://semver.org).
 
+## [Unreleased]
+
+### Added
+- `OddSocketsUnityConfig.ManagerUrl` so a build can be pointed at a self-hosted or staging
+  manager. It falls back to the `ODDSOCKETS_MANAGER_URL` environment variable and then to
+  the public endpoint, and must be an absolute `http://` or `https://` URL.
+
+### Fixed
+- Manager discovery no longer ignores the configured manager and return the public endpoint
+  unconditionally. A configured manager is now used verbatim, and if it is unreachable the
+  connection fails with the underlying error instead of silently connecting to production.
+
+### Changed
+- `ManagerDiscovery.TestConnectivityAsync` is replaced by `VerifyConnectivityAsync`, which
+  throws when the manager cannot be reached instead of returning a `bool` that a caller can
+  ignore and read as success.
+- `ManagerDiscovery.DiscoverManagerUrlAsync`, `DiscoverManagerUrl` and `GetManagerInfoAsync`
+  now take the configured manager URL as an argument.
+
 ## [1.0.1] - 2026-07-27
 
 ### Fixed
