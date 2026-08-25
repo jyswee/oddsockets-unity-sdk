@@ -30,6 +30,11 @@ namespace OddSockets.Unity
         public event Action<ReconnectInfo> OnReconnecting;
         public event Action OnMaxReconnectAttemptsReached;
 
+        // Fired after a minted token is silently refreshed ahead of expiry
+        // (token-mode clients only). Carries the new expiry epoch ms, or 0 if
+        // unknown. (FEAT-2026-0824-0040)
+        public event Action<long> OnTokenRefreshed;
+
         // Private fields
         private SocketIOUnity socket;
         private string workerUrl;
@@ -41,6 +46,12 @@ namespace OddSockets.Unity
         private string clientIdentifier;
         private SessionInfo sessionInfo;
         private OddSocketsEnhancedFeatures enhanced;
+
+        // v1 minted-token auth state (FEAT-2026-0824-0040). Populated only when a
+        // TokenProvider is configured in place of a static ApiKey.
+        private string token;
+        private long tokenExpiresAtMs; // 0 = unknown
+        private System.Threading.CancellationTokenSource tokenRefreshCts;
 
         // Custom server->client event listeners registered via On(). Kept
         // independent of the socket instance so they survive reconnects: a new
@@ -179,6 +190,15 @@ namespace OddSockets.Unity
 
             try
             {
+                // Step 0: In token mode, fetch a FRESH minted token before anything
+                // else. On a reconnect this is the refresh path — a token that expired
+                // during an outage is never replayed, because we always ask the
+                // provider again here. (FEAT-2026-0824-0040)
+                if (IsTokenMode())
+                {
+                    await ResolveTokenAsync();
+                }
+
                 // Step 1: Get worker assignment from manager
                 await GetWorkerAssignment();
 
@@ -213,6 +233,11 @@ namespace OddSockets.Unity
         public void Disconnect()
         {
             connectionState = ConnectionState.Disconnected;
+
+            // Stop any pending minted-token refresh (FEAT-2026-0824-0040).
+            tokenRefreshCts?.Cancel();
+            tokenRefreshCts?.Dispose();
+            tokenRefreshCts = null;
 
             if (socket != null)
             {
@@ -417,8 +442,13 @@ namespace OddSockets.Unity
                 // Use the manager this client was configured for, never a substitute
                 var managerUrl = await ManagerDiscovery.Instance.DiscoverManagerUrlAsync(config.ApiKey, config.ManagerUrl);
                 var userId = config.UserId ?? clientIdentifier;
+                // Token clients carry no API key — the manager picks a worker from the
+                // minted token instead. (FEAT-2026-0824-0040)
+                var credentialParam = IsTokenMode()
+                    ? $"token={UnityEngine.Networking.UnityWebRequest.EscapeURL(token)}"
+                    : $"apiKey={UnityEngine.Networking.UnityWebRequest.EscapeURL(config.ApiKey)}";
                 var selectWorkerUrl = $"{managerUrl}/api/cluster/select-worker" +
-                    $"?apiKey={UnityEngine.Networking.UnityWebRequest.EscapeURL(config.ApiKey)}" +
+                    $"?{credentialParam}" +
                     $"&userId={UnityEngine.Networking.UnityWebRequest.EscapeURL(userId)}" +
                     $"&clientIdentifier={UnityEngine.Networking.UnityWebRequest.EscapeURL(clientIdentifier)}";
 
@@ -485,13 +515,23 @@ namespace OddSockets.Unity
             }
 
             var uri = new Uri(workerUrl);
-            socket = new SocketIOUnity(uri, new SocketIOOptions
-            {
-                Auth = new Dictionary<string, string>
+            // Token clients present the minted token; the worker's v1 handshake branch
+            // reads socket.handshake.auth.token (FEAT-2026-0824-0039). API-key clients
+            // present the key as before.
+            var handshakeAuth = IsTokenMode()
+                ? new Dictionary<string, string>
+                {
+                    ["token"] = token,
+                    ["userId"] = config.UserId ?? clientIdentifier
+                }
+                : new Dictionary<string, string>
                 {
                     ["apiKey"] = config.ApiKey,
                     ["userId"] = config.UserId ?? clientIdentifier
-                },
+                };
+            socket = new SocketIOUnity(uri, new SocketIOOptions
+            {
+                Auth = handshakeAuth,
                 Transport = SocketIOClient.Transport.TransportProtocol.WebSocket,
                 ConnectionTimeout = TimeSpan.FromSeconds(config.Timeout)
             });
@@ -706,10 +746,148 @@ namespace OddSockets.Unity
         /// </summary>
         private string GenerateClientIdentifier()
         {
-            // Create a consistent identifier based on API key and user ID
+            // Create a consistent identifier based on the credential and user ID.
+            // Token clients have no API key, so seed with a stable literal — the
+            // useful identity for presence is the token's `sub`, applied server-side.
             var baseId = config.UserId ?? "default";
-            var apiKeyHash = HashString(config.ApiKey);
-            return $"{apiKeyHash}_{baseId}";
+            var seed = string.IsNullOrEmpty(config.ApiKey) ? "token-client" : config.ApiKey;
+            var seedHash = HashString(seed);
+            return $"{seedHash}_{baseId}";
+        }
+
+        /// <summary>
+        /// Internal: True when this client authenticates with minted tokens (a
+        /// TokenProvider callback) rather than a static API key. (FEAT-2026-0824-0040)
+        /// </summary>
+        private bool IsTokenMode()
+        {
+            return config != null && config.TokenProvider != null;
+        }
+
+        /// <summary>
+        /// Internal: Invoke the configured TokenProvider, cache the minted token with
+        /// its expiry, and arm the pre-expiry refresh timer. Called before every
+        /// (re)connect and by that timer. (FEAT-2026-0824-0040)
+        /// </summary>
+        private async Task ResolveTokenAsync()
+        {
+            var result = await config.TokenProvider();
+
+            if (result == null || string.IsNullOrEmpty(result.Token))
+            {
+                throw new InvalidOperationException(
+                    "TokenProvider must return an OddSocketsToken with a non-empty Token");
+            }
+
+            long expiresAtMs = 0;
+            if (!string.IsNullOrEmpty(result.ExpiresAt))
+            {
+                if (DateTimeOffset.TryParse(result.ExpiresAt, null,
+                        System.Globalization.DateTimeStyles.AssumeUniversal
+                        | System.Globalization.DateTimeStyles.AdjustToUniversal,
+                        out var parsed))
+                {
+                    expiresAtMs = parsed.ToUnixTimeMilliseconds();
+                }
+            }
+            else if (result.Exp.HasValue)
+            {
+                expiresAtMs = result.Exp.Value * 1000L; // JWT exp is epoch seconds
+            }
+
+            // No explicit expiry supplied — read `exp` out of the JWT so we can still
+            // time a refresh rather than letting the token lapse unnoticed.
+            if (expiresAtMs == 0)
+            {
+                expiresAtMs = ExpiryFromJwt(result.Token);
+            }
+
+            token = result.Token;
+            tokenExpiresAtMs = expiresAtMs;
+            ScheduleTokenRefresh();
+        }
+
+        /// <summary>
+        /// Internal: Best-effort read of the `exp` claim (epoch seconds) from a JWT
+        /// WITHOUT verifying it — the worker is the verifier; the client only needs
+        /// exp to time its refresh. Returns epoch ms, or 0 if unreadable.
+        /// </summary>
+        private long ExpiryFromJwt(string jwt)
+        {
+            try
+            {
+                var parts = jwt.Split('.');
+                if (parts.Length < 2) return 0;
+
+                var payload = parts[1].Replace('-', '+').Replace('_', '/');
+                switch (payload.Length % 4)
+                {
+                    case 2: payload += "=="; break;
+                    case 3: payload += "="; break;
+                }
+
+                var json = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(payload));
+                var exp = JObject.Parse(json)["exp"];
+                return exp != null ? exp.Value<long>() * 1000L : 0;
+            }
+            catch (Exception)
+            {
+                return 0;
+            }
+        }
+
+        /// <summary>
+        /// Internal: Arm a one-shot timer to silently refresh the minted token
+        /// TokenRefreshLeadMs before it expires (default 2 min). The refresh updates
+        /// the cached token used by the NEXT (re)connect handshake — the worker
+        /// authenticates a token only at handshake and never re-checks a live socket,
+        /// so a fresh token simply needs to be ready. (FEAT-2026-0824-0040)
+        /// </summary>
+        private void ScheduleTokenRefresh()
+        {
+            tokenRefreshCts?.Cancel();
+            tokenRefreshCts?.Dispose();
+            tokenRefreshCts = null;
+
+            if (!IsTokenMode() || tokenExpiresAtMs == 0)
+            {
+                return;
+            }
+
+            var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            var delayMs = tokenExpiresAtMs - nowMs - config.TokenRefreshLeadMs;
+            if (delayMs < 0) delayMs = 0;
+
+            var cts = new System.Threading.CancellationTokenSource();
+            tokenRefreshCts = cts;
+            _ = RefreshTokenAfterAsync(delayMs, cts.Token);
+        }
+
+        /// <summary>
+        /// Internal: wait <paramref name="delayMs"/> then refresh the minted token.
+        /// On failure the existing connection stays up on its already-accepted token;
+        /// the next reconnect retries the provider. (FEAT-2026-0824-0040)
+        /// </summary>
+        private async Task RefreshTokenAfterAsync(long delayMs, System.Threading.CancellationToken ct)
+        {
+            try
+            {
+                await Task.Delay((int)Math.Min(delayMs, int.MaxValue), ct);
+                if (ct.IsCancellationRequested) return;
+
+                await ResolveTokenAsync();
+                var expiry = tokenExpiresAtMs;
+                DispatchToMainThread("token_refreshed", () => OnTokenRefreshed?.Invoke(expiry));
+            }
+            catch (OperationCanceledException)
+            {
+                // Superseded by a newer schedule or a disconnect — nothing to do.
+            }
+            catch (Exception ex)
+            {
+                DispatchToMainThread("token_refresh_error", () =>
+                    OnError?.Invoke(new Exception($"token refresh failed: {ex.Message}", ex)));
+            }
         }
 
         /// <summary>
