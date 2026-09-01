@@ -97,6 +97,27 @@ namespace OddSockets.Unity
         public event Action<JToken> OnUserRemoved;
         public event Action<JToken> OnChannelMembers;
 
+        // ── Challenges / leaderboards / achievements (Game Center parity) ──
+        // Broadcasts to the challenge room:
+        public event Action<JToken> OnChallengeProgress;
+        public event Action<JToken> OnLeaderboardRankChange;
+        public event Action<JToken> OnChallengeComplete;
+        public event Action<JToken> OnAchievementProgress;
+        public event Action<JToken> OnAchievementUnlock;
+        // Directed 1:1 invite handshake (delivered to the addressed player only):
+        public event Action<JToken> OnChallengeInvited;
+        public event Action<JToken> OnChallengeReplyReceived;
+        public event Action<JToken> OnChallengeInviteCancelled;
+        // Request/ack responses:
+        public event Action<JToken> OnChallengeCreated;
+        public event Action<JToken> OnChallengeCompleted;
+        public event Action<JToken> OnStandingsData;
+        public event Action<JToken> OnAchievementState;
+        public event Action<JToken> OnChallengeInviteSent;
+        public event Action<JToken> OnChallengeReplySent;
+        public event Action<JToken> OnChallengeInviteCancelSent;
+        public event Action<JToken> OnChallengeInvites;
+
         internal OddSocketsEnhancedFeatures(OddSocketsClient oddSocketsClient)
         {
             client = oddSocketsClient ?? throw new ArgumentNullException(nameof(oddSocketsClient));
@@ -171,6 +192,25 @@ namespace OddSockets.Unity
             client.On("user_left_channel", p => OnUserLeftChannel?.Invoke(p));
             client.On("user_removed", p => OnUserRemoved?.Invoke(p));
             client.On("channel_members", p => OnChannelMembers?.Invoke(p));
+
+            client.On("challenge_progress", p => OnChallengeProgress?.Invoke(p));
+            client.On("leaderboard_rank_change", p => OnLeaderboardRankChange?.Invoke(p));
+            client.On("challenge_complete", p => OnChallengeComplete?.Invoke(p));
+            client.On("achievement_progress", p => OnAchievementProgress?.Invoke(p));
+            client.On("achievement_unlock", p => OnAchievementUnlock?.Invoke(p));
+
+            client.On("challenge_invited", p => OnChallengeInvited?.Invoke(p));
+            client.On("challenge_reply_received", p => OnChallengeReplyReceived?.Invoke(p));
+            client.On("challenge_invite_cancelled", p => OnChallengeInviteCancelled?.Invoke(p));
+
+            client.On("challenge_create_success", p => OnChallengeCreated?.Invoke(p));
+            client.On("challenge_complete_success", p => OnChallengeCompleted?.Invoke(p));
+            client.On("challenge_standings_success", p => OnStandingsData?.Invoke(p));
+            client.On("achievement_state", p => OnAchievementState?.Invoke(p));
+            client.On("challenge_invite_success", p => OnChallengeInviteSent?.Invoke(p));
+            client.On("challenge_reply_success", p => OnChallengeReplySent?.Invoke(p));
+            client.On("challenge_invite_cancel_success", p => OnChallengeInviteCancelSent?.Invoke(p));
+            client.On("challenge_invites", p => OnChallengeInvites?.Invoke(p));
         }
 
         // ─────────────────────────── Reactions ───────────────────────────
@@ -424,5 +464,107 @@ namespace OddSockets.Unity
         /// <summary>List a channel's members (see OnChannelMembers).</summary>
         public Task GetChannelMembersAsync(string channelId)
             => client.EmitAsync("get_channel_members", new { channelId });
+
+        // ──────────────── Challenges / leaderboards / achievements ────────────────
+        // Game Center parity: scored challenges + leaderboards + achievements, plus
+        // a directed 1:1 invite/accept/decline handshake. Responses arrive as the
+        // events wired above (e.g. GetStandingsAsync → OnStandingsData).
+
+        /// <summary>
+        /// Open a challenge. <paramref name="ranked"/> enables a shared leaderboard
+        /// (best-value ZSET) so progress publishes OnLeaderboardRankChange. Ack:
+        /// OnChallengeCreated.
+        /// </summary>
+        public Task CreateChallengeAsync(string challengeId, string metric, bool ranked = false,
+            string channel = null, string resultWebhookUrl = null, string standingsUrl = null)
+            => client.EmitAsync("challenge_create", new
+            {
+                challengeId, metric, ranked, channel, resultWebhookUrl, standingsUrl
+            });
+
+        /// <summary>
+        /// Report a participant's value. Broadcasts OnChallengeProgress; on ranked
+        /// challenges a rank move also broadcasts OnLeaderboardRankChange. Pass a
+        /// stable <paramref name="eventId"/> for idempotent retries.
+        /// </summary>
+        public Task ReportProgressAsync(string challengeId, double value, string metric = null,
+            string eventId = null, string cohort = null, string platform = null, string channel = null)
+            => client.EmitAsync("challenge_progress", new
+            {
+                challengeId, metric, value, eventId, cohort, platform, channel
+            });
+
+        /// <summary>
+        /// Finalize a participant. <paramref name="outcome"/> ∈
+        /// completed | failed | expired | conceded | tied. Turn-based mapping:
+        /// win = completed (rank 1 when ranked), loss = failed, draw = tied,
+        /// resign = conceded, timeout = expired. Broadcasts OnChallengeComplete;
+        /// ack OnChallengeCompleted carries server finalValue/rank.
+        /// </summary>
+        public Task CompleteChallengeAsync(string challengeId, string outcome, string eventId = null,
+            object reward = null, string cohort = null, string platform = null, string channel = null)
+            => client.EmitAsync("challenge_complete", new
+            {
+                challengeId, outcome, eventId, reward, cohort, platform, channel
+            });
+
+        /// <summary>
+        /// Unlock or advance an achievement. Supply <paramref name="percentComplete"/>
+        /// (0–100) for progressive achievements: &lt;100 broadcasts
+        /// OnAchievementProgress, ≥100 (or omitted) broadcasts OnAchievementUnlock.
+        /// </summary>
+        public Task UnlockAchievementAsync(string achievementId, string name = null, string tier = null,
+            double? percentComplete = null, string challengeId = null, object reward = null,
+            string cohort = null, string platform = null, string eventId = null)
+            => client.EmitAsync("achievement_unlock", new
+            {
+                achievementId, name, tier, percentComplete, challengeId, reward, cohort, platform, eventId
+            });
+
+        /// <summary>
+        /// Fetch top-N leaderboard standings + the caller's own rank (GameKit
+        /// loadEntries). Ack: OnStandingsData.
+        /// </summary>
+        public Task GetStandingsAsync(string challengeId, int limit = 20, int offset = 0)
+            => client.EmitAsync("challenge_standings", new { challengeId, limit, offset });
+
+        /// <summary>
+        /// Query persisted achievement state for this player (all, or one
+        /// <paramref name="achievementId"/>). Ack: OnAchievementState.
+        /// </summary>
+        public Task GetAchievementsAsync(string achievementId = null)
+            => client.EmitAsync("achievement_query", new { achievementId });
+
+        /// <summary>
+        /// Send a directed 1:1 invite to another player (match/clan/etc via
+        /// <paramref name="type"/>). Carries an arbitrary <paramref name="payload"/>
+        /// (≤8KB) and is persisted for offline pull. Invitee receives
+        /// OnChallengeInvited; ack OnChallengeInviteSent carries the inviteId.
+        /// </summary>
+        public Task SendChallengeInviteAsync(string toUserId, string type = null,
+            object payload = null, int? ttl = null)
+            => client.EmitAsync("challenge_invite", new { toUserId, type, payload, ttl });
+
+        /// <summary>
+        /// Accept or decline an invite you received. Only the invitee may reply.
+        /// Inviter receives OnChallengeReplyReceived; ack OnChallengeReplySent.
+        /// </summary>
+        public Task ReplyChallengeInviteAsync(string inviteId, bool accept,
+            object payload = null, string reason = null)
+            => client.EmitAsync("challenge_reply", new { inviteId, accept, payload, reason });
+
+        /// <summary>
+        /// Cancel an invite you sent (inviter only). Invitee receives
+        /// OnChallengeInviteCancelled; ack OnChallengeInviteCancelSent.
+        /// </summary>
+        public Task CancelChallengeInviteAsync(string inviteId)
+            => client.EmitAsync("challenge_invite_cancel", new { inviteId });
+
+        /// <summary>
+        /// Pull this player's pending invites (offline-capable inbox). Ack:
+        /// OnChallengeInvites.
+        /// </summary>
+        public Task GetChallengeInvitesAsync()
+            => client.EmitAsync("challenge_invites_query", new { });
     }
 }
