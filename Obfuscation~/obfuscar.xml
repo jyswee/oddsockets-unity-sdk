@@ -1,0 +1,88 @@
+<?xml version='1.0'?>
+<Obfuscator>
+  <!-- Paths are relative to build.sh's working dir (Obfuscation~/work). -->
+  <Var name="InPath" value="./work/in" />
+  <Var name="OutPath" value="./work/out" />
+
+  <!-- Keep the public SDK surface callable; hide/rename private internals. -->
+  <Var name="KeepPublicApi" value="true" />
+  <Var name="HidePrivateApi" value="true" />
+  <!-- Encrypt string literals: this is the highest-value MOAT win. It hides
+       wire event names + manager endpoints. Safe for serialization because it
+       only rewrites IL string constants, never metadata field names. -->
+  <Var name="HideStrings" value="true" />
+  <Var name="ReuseNames" value="true" />
+  <!-- Newtonsoft.Json serializes several SDK model types by reflection over their
+       properties/fields. Renaming those members makes Newtonsoft build a broken
+       contract ("A member with the name '' already exists") the moment a DTO is
+       (de)serialized on the wire. Field/property NAMES are the observable wire
+       field names anyway (channel, data, messageId, ...), so hiding them buys
+       almost no MOAT. Keep them; the real protection (HideStrings = wire event
+       names + manager endpoints, plus method-body + type renaming) stays on. -->
+  <Var name="RenameProperties" value="false" />
+  <Var name="RenameEvents" value="false" />
+  <Var name="RenameFields" value="false" />
+  <Var name="OptimizeMethods" value="true" />
+  <Var name="SuppressIldasm" value="true" />
+
+  <!-- Ref assemblies so Obfuscar can resolve the type graph.
+       ./work/refs is populated by build.sh from the compiling Unity project.
+       The Unity paths below are pinned to the Editor version that compiled the
+       input DLL (6000.0.79f1); adjust if you build with a different Editor. -->
+  <AssemblySearchPath path="./work/refs" />
+  <AssemblySearchPath path="/Applications/Unity/Hub/Editor/6000.0.79f1/Unity.app/Contents/Managed/UnityEngine" />
+  <AssemblySearchPath path="/Applications/Unity/Hub/Editor/6000.0.79f1/Unity.app/Contents/Managed" />
+  <AssemblySearchPath path="/Applications/Unity/Hub/Editor/6000.0.79f1/Unity.app/Contents/MonoBleedingEdge/lib/mono/unityjit-macos" />
+
+  <Module file="$(InPath)/OddSockets.Unity.dll">
+    <!-- C# anonymous types (new { a = ..., b = ... }) used to build wire payloads
+         are serialized by Newtonsoft, which matches their single parameterized
+         constructor's parameters BY NAME to the properties. Obfuscar strips
+         parameter names to empty, so Newtonsoft sees duplicate '' names and throws
+         "A member with the name '' already exists". Leave anon types untouched.
+         NOTE: Obfuscar strips ctor param names GLOBALLY (metadata-shrink pass)
+         even for skipped types, so the corlib-patch post-step restores them. -->
+    <SkipType rx=".*AnonymousType.*" />
+    <!-- Do NOT rename private [SerializeField] / JsonUtility-serialized fields.
+         Unity's Inspector binding + JsonUtility (de)serialization key off the
+         exact field name; renaming them silently breaks wire + Inspector. -->
+    <SkipField type="OddSockets.Unity.OddSocketsMessage" name="channel" />
+    <SkipField type="OddSockets.Unity.OddSocketsMessage" name="data" />
+    <SkipField type="OddSockets.Unity.OddSocketsMessage" name="messageId" />
+    <SkipField type="OddSockets.Unity.OddSocketsMessage" name="userId" />
+    <SkipField type="OddSockets.Unity.OddSocketsMessage" name="timestamp" />
+    <SkipField type="OddSockets.Unity.OddSocketsMessage" name="metadata" />
+
+    <SkipField type="OddSockets.Unity.BulkResult" name="success" />
+    <SkipField type="OddSockets.Unity.BulkResult" name="error" />
+    <SkipField type="OddSockets.Unity.BulkResult" name="result" />
+
+    <SkipField type="OddSockets.Unity.PresenceInfo" name="channel" />
+    <SkipField type="OddSockets.Unity.PresenceInfo" name="occupancy" />
+    <SkipField type="OddSockets.Unity.PresenceInfo" name="occupants" />
+
+    <SkipField type="OddSockets.Unity.ManagerInfo" name="version" />
+    <SkipField type="OddSockets.Unity.ManagerInfo" name="status" />
+    <SkipField type="OddSockets.Unity.ManagerInfo" name="activeWorkers" />
+    <SkipField type="OddSockets.Unity.ManagerInfo" name="totalConnections" />
+    <SkipField type="OddSockets.Unity.ManagerInfo" name="timestamp" />
+
+    <SkipField type="OddSockets.Unity.MessageSizeInfo" name="sizeBytes" />
+    <SkipField type="OddSockets.Unity.MessageSizeInfo" name="sizeKB" />
+    <SkipField type="OddSockets.Unity.MessageSizeInfo" name="isValid" />
+    <SkipField type="OddSockets.Unity.MessageSizeInfo" name="percentageUsed" />
+    <SkipField type="OddSockets.Unity.MessageSizeInfo" name="remainingBytes" />
+
+    <!-- MonoBehaviour Inspector-serialized config reference -->
+    <SkipField type="OddSockets.Unity.OddSocketsClient" name="config" />
+
+    <!-- Unity "magic" lifecycle methods are invoked by the engine BY NAME.
+         Obfuscar renames private methods by default, which silently stops Unity
+         from calling them (Awake never runs -> `channels` dict never initialized
+         -> NullReferenceException in Channel()). Keep their names verbatim. -->
+    <SkipMethod type="OddSockets.Unity.OddSocketsClient" name="Awake" />
+    <SkipMethod type="OddSockets.Unity.OddSocketsClient" name="Start" />
+    <SkipMethod type="OddSockets.Unity.OddSocketsClient" name="Update" />
+    <SkipMethod type="OddSockets.Unity.OddSocketsClient" name="OnDestroy" />
+  </Module>
+</Obfuscator>
