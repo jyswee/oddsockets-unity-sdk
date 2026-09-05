@@ -5,3 +5,8 @@ Build/
 .DS_Store
 *.log
 JAVASCRIPT_PATTERN_COMPLIANCE.md
+
+# Obfuscation pipeline build artifacts (dev tooling; keep the sources, drop the output)
+Obfuscation~/work/
+Obfuscation~/corlib-patch/bin/
+Obfuscation~/corlib-patch/obj/

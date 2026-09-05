@@ -3,6 +3,15 @@
 All notable changes to the OddSockets Realtime Unity SDK are documented here.
 This project adheres to [Semantic Versioning](https://semver.org).
 
+## [1.0.2] - 2026-09-05
+
+### Changed
+- The OddSockets runtime now ships as a precompiled, obfuscated managed plugin
+  (`Runtime/OddSockets.Unity.dll`) instead of source. The public API, Inspector-serialized
+  fields, and wire protocol are unchanged; internal members are renamed and string literals
+  are encrypted. `ThirdParty/SocketIOUnity` and the `com.unity.nuget.newtonsoft-json`
+  dependency are unchanged and continue to resolve the plugin's assembly references by name.
+
 ## [Unreleased]
 
 ### Added
