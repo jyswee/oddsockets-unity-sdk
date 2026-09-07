@@ -112,27 +112,58 @@ Import from `Window > Package Manager > OddSockets Realtime > Samples`:
 - **Basic Usage** - connect, subscribe, publish.
 - **Two-Client Round Trip** - two independent clients proving an end-to-end round trip through the worker.
 
-## Get a Free API Key
+## Token auth for shipped builds
+
+Shipped game clients must never embed the API key. Set a `TokenProvider` delegate
+instead: your game backend signs a player JWT, and the client exchanges it for a
+short-lived, channel-scoped OddSockets token at
+`POST https://connect.oddsockets.tyga.network/v1/token`. The SDK silently refreshes
+the token before expiry and re-mints it on every reconnect.
+
+```csharp
+client.Initialize(new OddSocketsUnityConfig
+{
+    UserId = "player-1",
+    AutoConnect = false,
+    TokenProvider = async () =>
+    {
+        // POST /v1/token with Authorization: Bearer <playerJwt>
+        // body: { "channels": ["lobby"] }   → { "token": "...", "expiresAt": "..." }
+        var json = await MyHttp.PostAsync(
+            "https://connect.oddsockets.tyga.network/v1/token", playerJwt,
+            "{\"channels\":[\"lobby\"]}");
+        return JsonUtility.FromJson<OddSocketsToken>(json);
+    }
+});
+```
+
+Token minting requires a one-time app registration (your token issuer +
+verification material) — contact us via [oddsockets.com](https://oddsockets.com).
+
+## Get an API Key
+
+No free tier — every plan starts with a 7-day free trial (nothing is charged
+during the trial). Signup issues a working API key instantly; the key runs
+keyless for 48 hours, and adding a card within that window extends it through
+the trial.
+
+Scriptable signup (CLI):
 
 ```bash
-curl -X POST https://oddsockets.com/api/agent-signup \
-  -H "Content-Type: application/json" \
-  -d '{"email": "you@example.com", "agentName": "my-agent", "platform": "unity"}'
-curl -X POST https://oddsockets.com/api/agent-signup/verify \
-  -H "Content-Type: application/json" \
-  -d '{"email": "you@example.com", "code": "123456", "agentName": "my-agent"}'
+npm i -g oddsockets-cli
+oddsockets plans                                  # list live plan ids
+oddsockets signup you@studio.com --plan oddsockets-starter
+oddsockets publish smoke-test '{"hello":"world"}' # verify in one line
 ```
+
+AI agents can also self-provision via MCP: connect to
+`https://mcp.oddsockets.ai/sse` and call `oddsockets_signup`.
 
 ## Plans
 
-| | Free | Starter | Pro |
-|---|---|---|---|
-| **Price** | $0/mo | $49.99/mo | $299/mo |
-| **MAU** | 100 | 1,000 | 50,000 |
-| **Concurrent connections** | 50 | 1,000 | Unlimited |
-| **Messages/day** | 10,000 | 4,320,000 | Unlimited |
-| **Channels** | 10 | Unlimited | Unlimited |
-| **Storage** | 100MB (24h) | 50GB (6 months) | Unlimited |
+`oddsockets-starter` $29/mo · `oddsockets-pro` $99/mo · `oddsockets-scale` $299/mo · `oddsockets-enterprise` (contact us)
+
+See [oddsockets.com/pricing](https://oddsockets.com/pricing) for current limits per tier.
 
 ## Get Accredited
 
@@ -144,7 +175,7 @@ Prove you can build and operate real-time features on OddSockets — channels, p
 
 ## Support
 
-- [Documentation](https://docs.oddsockets.com/sdks/unity)
+- [Documentation](https://oddsockets.com/docs)
 - [Issue Tracker](https://github.com/jyswee/oddsockets-unity-sdk/issues)
 - [Email Support](mailto:support@oddsockets.com)
 
