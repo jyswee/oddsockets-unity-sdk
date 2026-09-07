@@ -175,7 +175,7 @@ Prove you can build and operate real-time features on OddSockets — channels, p
 
 ## Support
 
-- [Documentation](https://oddsockets.com/docs)
+- [Documentation](https://docs.oddsockets.com)
 - [Issue Tracker](https://github.com/jyswee/oddsockets-unity-sdk/issues)
 - [Email Support](mailto:support@oddsockets.com)
 
