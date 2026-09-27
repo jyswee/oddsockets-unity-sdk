@@ -11,9 +11,9 @@ manager assigns each client a worker transparently.
 
 Target manager: `https://connect.oddsockets.tyga.network`
 
-## Get a free API key
+## Get an API key
 
-No credit card required. Sign up in two steps with `curl`.
+Sign up in two steps with `curl`. No card needed for the first 48 hours; add one to start the 7-day free trial.
 
 1. Request a verification code:
 
