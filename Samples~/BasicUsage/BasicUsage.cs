@@ -361,8 +361,8 @@ namespace OddSockets.Unity.Examples
 
         private void OnWorkerAssigned(WorkerAssignmentInfo info)
         {
-            Debug.Log($"Assigned to worker: {info.WorkerId} at {info.WorkerUrl}");
-            UpdateStatus($"Assigned to worker: {info.WorkerId}");
+            Debug.Log($"Connection endpoint assigned: {info.WorkerUrl}");
+            UpdateStatus("Connection endpoint assigned");
         }
 
         private void OnReconnecting(ReconnectInfo info)
