@@ -4,42 +4,36 @@ A runnable PlayMode demo that proves a real real-time round-trip against OddSock
 using **two independent clients**: **connect -> subscribe -> publish -> receive**.
 
 Because the subscriber (`alice`) and the publisher (`bob`) are separate connections,
-a message that reaches alice can only have travelled through the assigned OddSockets
-worker - so this doubles as an honest end-to-end regression (no mocks, no local echo).
-The SDK speaks genuine Socket.IO (Engine.IO v4) over a WebSocket to the worker; the
-manager assigns each client a worker transparently.
-
-Target manager: `https://connect.oddsockets.tyga.network`
+a message that reaches alice can only have travelled through the live OddSockets
+service - so this doubles as an honest end-to-end regression (no mocks, no local
+echo). Connection setup and routing are resolved by the SDK; this sample configures
+nothing but an API key.
 
 ## Get an API key
 
-Sign up in two steps with `curl`. No card needed for the first 48 hours; add one to start the 7-day free trial.
-
-1. Request a verification code:
-
-```bash
-curl -X POST https://oddsockets.com/api/agent-signup \
-  -H "Content-Type: application/json" \
-  -d '{"email": "you@example.com", "agentName": "unity-demo", "platform": "unity"}'
-```
-
-2. Check your inbox for the code, then verify to receive your API key:
+No free tier - every plan starts with a 7-day free trial (nothing is charged
+during the trial). Signup issues a working API key instantly; the key runs
+keyless for 48 hours, and adding a card within that window extends it through
+the trial.
 
 ```bash
-curl -X POST https://oddsockets.com/api/agent-signup/verify \
-  -H "Content-Type: application/json" \
-  -d '{"email": "you@example.com", "code": "123456", "agentName": "unity-demo"}'
+npm i -g oddsockets-cli
+oddsockets plans                                  # list live plan ids
+oddsockets signup you@studio.com --plan oddsockets-starter
 ```
 
-The verify response contains your API key (starts with `ak_`).
+AI agents can also self-provision via MCP: connect to
+`https://mcp.oddsockets.ai/sse` and call `oddsockets_signup`.
+
+Your API key starts with `ak_`.
 
 ## Run it in the Editor
 
 Unity is GUI-driven, so the demo is a scene component you attach and Play.
 
-1. Copy the SDK `Scripts/` folder into your project's `Assets/` directory (see the repo
-   root README). The SDK depends on Newtonsoft Json and a Socket.IO Unity client.
-2. Copy `demo/DemoRoundTrip.cs` into your project's `Assets/` directory.
+1. Install the SDK package (see the repo root README for the Package Manager URL).
+2. In Package Manager, select the OddSockets package and import the **TwoClientDemo**
+   sample. That drops `DemoRoundTrip.cs` into your project's `Assets/Samples/` directory.
 3. Provide your API key. Preferred: set the `ODDSOCKETS_API_KEY` environment variable
    before launching the Unity Editor so the process inherits it:
 
@@ -58,12 +52,11 @@ Unity is GUI-driven, so the demo is a scene component you attach and Play.
 On success the Console logs:
 
 ```
-[connect] connecting both clients...
-[alice] worker [instance]
-[bob]   worker [instance]
+[connect] connecting both clients, channel 'demo-1a2b3c4d', nonce '...'...
 [connect] alice = connected, bob = connected
 [alice] subscribed to demo-1a2b3c4d (presence on)
 [bob] published to demo-1a2b3c4d
+[alice] waiting for bob's message...
 [alice] received bob's message (nonce matched) - real round-trip.
 [alice] presence: 1 user(s).
 [alice] unsubscribed.
@@ -82,17 +75,17 @@ contains a GameObject with the `DemoRoundTrip` component:
 
 ```bash
 export ODDSOCKETS_API_KEY="ak_your_key_here"
-"/path/to/Unity" -batchmode -nographics -projectPath "$(pwd)" \
-  -executeMethod is not required - the component runs on scene Start
+"/path/to/Unity" -batchmode -nographics -projectPath "$(pwd)"
 ```
 
-Load the demo scene in `-batchmode` (for example via a bootstrap scene set as the first
-Build Settings scene) and the run exits `0` on a verified round-trip, non-zero otherwise.
+No `-executeMethod` is needed - the component runs on scene `Start`. Make the demo scene
+the first entry in Build Settings so `-batchmode` loads it, and the run exits `0` on a
+verified round-trip, non-zero otherwise.
 
 ## The code, step by step
 
 Stand up two independent clients - a subscriber and a publisher - each its own
-`OddSocketsClient` MonoBehaviour and its own worker connection:
+`OddSocketsClient` MonoBehaviour with its own connection:
 
 ```csharp
 var alice = gameObject.AddComponent<OddSocketsClient>();
@@ -106,7 +99,7 @@ await bob.ConnectAsync();
 ```
 
 Subscribe on the subscriber (presence enabled). A message only lands in the callback if
-it came back through the worker:
+it came back through the service:
 
 ```csharp
 var aliceChannel = alice.Channel(channelName);
@@ -131,10 +124,10 @@ bob.Disconnect();
 
 ## What it demonstrates
 
-- Manager discovery + automatic worker assignment (fully transparent)
+- Zero-config connection: the SDK resolves routing itself, you supply only an API key
 - `client.Channel()` -> `channel.SubscribeAsync()` -> `channel.PublishAsync()`
 - **Cross-client delivery**: a message published by `bob` is delivered to `alice`'s
-  subscription in real time - provably through the worker, not a local echo
+  subscription in real time - provably through the service, not a local echo
 - Presence tracking, unsubscribe, and graceful disconnect
 - A watchdog timeout so a stalled handshake or round-trip is reported as a failure
 - Reading the API key from an environment variable so no key is hardcoded

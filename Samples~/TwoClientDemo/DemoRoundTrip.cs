@@ -17,10 +17,10 @@ namespace OddSockets.Unity.Demo
     ///   bob   - publisher
     ///
     /// Because alice and bob are separate connections, a message that reaches alice
-    /// can only have travelled through the assigned OddSockets worker - so this is a
+    /// can only have travelled through the live OddSockets service - so this is a
     /// genuine cross-client regression, not a local echo. On Start() this component:
     ///
-    ///   1. Connects alice and bob (the manager assigns each a worker transparently).
+    ///   1. Connects alice and bob (the SDK resolves connection setup transparently).
     ///   2. alice subscribes to a unique channel "demo-&lt;random&gt;" with presence on.
     ///   3. bob publishes a { text, nonce } message to that channel.
     ///   4. alice receives bob's message; a matching nonce proves a real round-trip.
@@ -36,8 +36,6 @@ namespace OddSockets.Unity.Demo
     ///
     /// When run in batch mode (-batchmode), the component quits the player with a
     /// non-zero exit code on failure so it can gate CI.
-    ///
-    /// Target manager: https://connect.oddsockets.tyga.network
     /// </summary>
     public class DemoRoundTrip : MonoBehaviour
     {
@@ -117,8 +115,6 @@ namespace OddSockets.Unity.Demo
                     return;
                 }
 
-                Debug.Log($"[alice] worker {alice.Worker?.WorkerId}");
-                Debug.Log($"[bob]   worker {bob.Worker?.WorkerId}");
                 Debug.Log("[connect] alice = connected, bob = connected");
 
                 // alice subscribes (presence on) BEFORE bob publishes.

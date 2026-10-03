@@ -11,7 +11,7 @@ OddSockets platform:
 
 bob publishes a message tagged with a random nonce; alice receives it on her
 subscription. Because alice and bob are separate connections, delivery can only
-have crossed the assigned live worker - so a pass is an honest end-to-end
+have crossed the live OddSockets service - so a pass is an honest end-to-end
 regression, not a local echo.
 
 How it was run (true headless, no GUI)
@@ -35,11 +35,14 @@ Live trace (from editor.log)
   [rig] alice RECEIVED nonce=b6816e3335a54bffb41f7ab9dd8563c9 on channel=rig-84485a1f
   [rig] round-trip received=True
 
-Path exercised end-to-end
--------------------------
-  1. Manager discovery  -> https://connect.oddsockets.tyga.network
-  2. Worker assignment  -> GET /api/cluster/select-worker?apiKey=&userId=&clientIdentifier=
-  3. Socket.IO connect  -> assigned worker (WebSocket, auth {apiKey, userId})
-  4. subscribe          -> ack "subscribed"
-  5. publish (bob)      -> worker broadcast "message"
-  6. deliver (alice)    -> nonce match confirmed
+SDK surface exercised end-to-end
+--------------------------------
+  1. Initialize         -> OddSocketsUnityConfig (api key from the environment)
+  2. ConnectAsync       -> two independent authenticated connections
+  3. SubscribeAsync     -> alice subscribed, acknowledged by the service
+  4. PublishAsync       -> bob published from the OTHER connection
+  5. message callback   -> alice received it, nonce match confirmed
+  6. Disconnect         -> both clients torn down cleanly
+
+Nothing in this run is mocked, stubbed or locally echoed: no endpoint, transport
+detail or routing is configured by the sample - the SDK resolves all of it.
