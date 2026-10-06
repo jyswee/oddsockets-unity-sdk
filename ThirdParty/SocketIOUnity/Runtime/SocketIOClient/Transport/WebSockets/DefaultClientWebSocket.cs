@@ -69,12 +69,12 @@ namespace SocketIOClient.Transport.WebSockets
 
         public async Task ConnectAsync(Uri uri, CancellationToken cancellationToken)
         {
-            await _ws.ConnectAsync(uri, cancellationToken).ConfigureAwait(false);
+            await _ws.ConnectAsync(uri, cancellationToken).ConfigureAwait(OSAwait.Continue);
         }
 
         public async Task DisconnectAsync(CancellationToken cancellationToken)
         {
-            await _ws.CloseAsync(WebSocketCloseStatus.NormalClosure, string.Empty, cancellationToken).ConfigureAwait(false);
+            await _ws.CloseAsync(WebSocketCloseStatus.NormalClosure, string.Empty, cancellationToken).ConfigureAwait(OSAwait.Continue);
         }
 
         public async Task SendAsync(byte[] bytes, TransportMessageType type, bool endOfMessage, CancellationToken cancellationToken)
@@ -84,13 +84,13 @@ namespace SocketIOClient.Transport.WebSockets
             {
                 msgType = WebSocketMessageType.Binary;
             }
-            await _ws.SendAsync(new ArraySegment<byte>(bytes), msgType, endOfMessage, cancellationToken).ConfigureAwait(false);
+            await _ws.SendAsync(new ArraySegment<byte>(bytes), msgType, endOfMessage, cancellationToken).ConfigureAwait(OSAwait.Continue);
         }
 
         public async Task<WebSocketReceiveResult> ReceiveAsync(int bufferSize, CancellationToken cancellationToken)
         {
             var buffer = new byte[bufferSize];
-            var result = await _ws.ReceiveAsync(new ArraySegment<byte>(buffer), cancellationToken).ConfigureAwait(false);
+            var result = await _ws.ReceiveAsync(new ArraySegment<byte>(buffer), cancellationToken).ConfigureAwait(OSAwait.Continue);
             return new WebSocketReceiveResult
             {
                 Count = result.Count,

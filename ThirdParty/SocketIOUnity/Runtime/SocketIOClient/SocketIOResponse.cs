@@ -51,12 +51,12 @@ namespace SocketIOClient
 
         public async Task CallbackAsync(params object[] data)
         {
-            await SocketIO.ClientAckAsync(PacketId, CancellationToken.None, data).ConfigureAwait(false);
+            await SocketIO.ClientAckAsync(PacketId, CancellationToken.None, data).ConfigureAwait(OSAwait.Continue);
         }
 
         public async Task CallbackAsync(CancellationToken cancellationToken, params object[] data)
         {
-            await SocketIO.ClientAckAsync(PacketId, cancellationToken, data).ConfigureAwait(false);
+            await SocketIO.ClientAckAsync(PacketId, cancellationToken, data).ConfigureAwait(OSAwait.Continue);
         }
     }
 }

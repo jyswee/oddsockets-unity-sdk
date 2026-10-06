@@ -155,7 +155,13 @@ namespace SocketIOClient
             JsonSerializer = new SystemTextJsonSerializer();
 
             HttpClient = new DefaultHttpClient();
+#if UNITY_WEBGL && !UNITY_EDITOR
+            // The WebGL sandbox has no System.Net sockets; use the browser's
+            // native WebSocket via the jslib bridge. (FEAT-2026-1006-0012)
+            ClientWebSocketProvider = () => new WebGLClientWebSocket();
+#else
             ClientWebSocketProvider = () => new DefaultClientWebSocket();
+#endif
             _expectedExceptions = new List<Type>
             {
                 typeof(TimeoutException),
@@ -252,14 +258,14 @@ namespace SocketIOClient
 
         private void ConnectInBackground(CancellationToken cancellationToken)
         {
-            Task.Factory.StartNew(async () =>
+            BackgroundTask.Run(async () =>
             {
                 while (true)
                 {
                     if (cancellationToken.IsCancellationRequested)
                         break;
                     DisposeResources();
-                    await InitTransportAsync().ConfigureAwait(false);
+                    await InitTransportAsync().ConfigureAwait(OSAwait.Continue);
                     var serverUri = UriConverter.GetServerUri(Options.Transport == TransportProtocol.WebSocket,
                         ServerUri, Options.EIO, Options.Path, Options.Query);
                     if (_attempts > 0)
@@ -268,7 +274,7 @@ namespace SocketIOClient
                     {
                         using (var cts = new CancellationTokenSource(Options.ConnectionTimeout))
                         {
-                            await Transport.ConnectAsync(serverUri, cts.Token).ConfigureAwait(false);
+                            await Transport.ConnectAsync(serverUri, cts.Token).ConfigureAwait(OSAwait.Continue);
                             break;
                         }
                     }
@@ -304,7 +310,7 @@ namespace SocketIOClient
                     _reconnectionDelay = Options.ReconnectionDelayMax;
                 }
 
-                await Task.Delay((int)_reconnectionDelay);
+                await BackgroundTask.Delay((int)_reconnectionDelay);
             }
             else
             {
@@ -372,7 +378,7 @@ namespace SocketIOClient
 
         public async Task ConnectAsync()
         {
-            await _connectingLock.WaitAsync().ConfigureAwait(false);
+            await _connectingLock.WaitAsync().ConfigureAwait(OSAwait.Continue);
             try
             {
                 if (Connected) return;
@@ -399,7 +405,7 @@ namespace SocketIOClient
                             new TimeoutException());
                     }
 
-                    await Task.Delay(100);
+                    await BackgroundTask.Delay(100);
                 }
             }
             finally
@@ -561,7 +567,7 @@ namespace SocketIOClient
             };
             try
             {
-                await Transport.SendAsync(msg, CancellationToken.None).ConfigureAwait(false);
+                await Transport.SendAsync(msg, CancellationToken.None).ConfigureAwait(OSAwait.Continue);
             }
             catch (Exception e)
             {
@@ -662,7 +668,7 @@ namespace SocketIOClient
                 };
             }
 
-            await Transport.SendAsync(msg, cancellationToken).ConfigureAwait(false);
+            await Transport.SendAsync(msg, cancellationToken).ConfigureAwait(OSAwait.Continue);
         }
 
         /// <summary>
@@ -673,7 +679,7 @@ namespace SocketIOClient
         /// <returns></returns>
         public async Task EmitAsync(string eventName, params object[] data)
         {
-            await EmitAsync(eventName, CancellationToken.None, data).ConfigureAwait(false);
+            await EmitAsync(eventName, CancellationToken.None, data).ConfigureAwait(OSAwait.Continue);
         }
 
         public async Task EmitAsync(string eventName, CancellationToken cancellationToken, params object[] data)
@@ -690,7 +696,7 @@ namespace SocketIOClient
                         Event = eventName,
                         Json = result.Json
                     };
-                    await Transport.SendAsync(msg, cancellationToken).ConfigureAwait(false);
+                    await Transport.SendAsync(msg, cancellationToken).ConfigureAwait(OSAwait.Continue);
                 }
                 else
                 {
@@ -700,7 +706,7 @@ namespace SocketIOClient
                         Event = eventName,
                         Json = result.Json
                     };
-                    await Transport.SendAsync(msg, cancellationToken).ConfigureAwait(false);
+                    await Transport.SendAsync(msg, cancellationToken).ConfigureAwait(OSAwait.Continue);
                 }
             }
             else
@@ -710,7 +716,7 @@ namespace SocketIOClient
                     Namespace = Namespace,
                     Event = eventName
                 };
-                await Transport.SendAsync(msg, cancellationToken).ConfigureAwait(false);
+                await Transport.SendAsync(msg, cancellationToken).ConfigureAwait(OSAwait.Continue);
             }
         }
 
@@ -723,7 +729,7 @@ namespace SocketIOClient
         /// <returns></returns>
         public async Task EmitAsync(string eventName, Action<SocketIOResponse> ack, params object[] data)
         {
-            await EmitAsync(eventName, CancellationToken.None, ack, data).ConfigureAwait(false);
+            await EmitAsync(eventName, CancellationToken.None, ack, data).ConfigureAwait(OSAwait.Continue);
         }
 
         public async Task EmitAsync(string eventName,
@@ -745,7 +751,7 @@ namespace SocketIOClient
                         Id = _packetId,
                         OutgoingBytes = new List<byte[]>(result.Bytes)
                     };
-                    await Transport.SendAsync(msg, cancellationToken).ConfigureAwait(false);
+                    await Transport.SendAsync(msg, cancellationToken).ConfigureAwait(OSAwait.Continue);
                 }
                 else
                 {
@@ -756,7 +762,7 @@ namespace SocketIOClient
                         Id = _packetId,
                         Json = result.Json
                     };
-                    await Transport.SendAsync(msg, cancellationToken).ConfigureAwait(false);
+                    await Transport.SendAsync(msg, cancellationToken).ConfigureAwait(OSAwait.Continue);
                 }
             }
             else
@@ -767,7 +773,7 @@ namespace SocketIOClient
                     Namespace = Namespace,
                     Id = _packetId
                 };
-                await Transport.SendAsync(msg, cancellationToken).ConfigureAwait(false);
+                await Transport.SendAsync(msg, cancellationToken).ConfigureAwait(OSAwait.Continue);
             }
         }
 
@@ -780,7 +786,7 @@ namespace SocketIOClient
                 OnDisconnected.TryInvoke(this, reason);
                 try
                 {
-                    await Transport.DisconnectAsync(CancellationToken.None).ConfigureAwait(false);
+                    await Transport.DisconnectAsync(CancellationToken.None).ConfigureAwait(OSAwait.Continue);
                 }
                 catch (Exception e)
                 {

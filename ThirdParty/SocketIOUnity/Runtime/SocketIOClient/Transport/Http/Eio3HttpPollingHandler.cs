@@ -28,7 +28,7 @@ namespace SocketIOClient.Transport.Http
             }
             var content = new ByteArrayContent(list.ToArray());
             content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
-            await HttpClient.PostAsync(AppendRandom(uri), content, cancellationToken).ConfigureAwait(false);
+            await HttpClient.PostAsync(AppendRandom(uri), content, cancellationToken).ConfigureAwait(OSAwait.Continue);
         }
 
         private static List<int> SplitInt(int number)

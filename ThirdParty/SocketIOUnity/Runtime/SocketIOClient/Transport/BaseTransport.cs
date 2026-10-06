@@ -47,7 +47,7 @@ namespace SocketIOClient.Transport
             {
                 payload.Bytes = msg.OutgoingBytes;
             }
-            await SendAsync(payload, cancellationToken).ConfigureAwait(false);
+            await SendAsync(payload, cancellationToken).ConfigureAwait(OSAwait.Continue);
         }
 
         protected virtual async Task OpenAsync(OpenedMessage msg)
@@ -72,7 +72,7 @@ namespace SocketIOClient.Transport
             {
                 try
                 {
-                    await SendAsync(connectMsg, CancellationToken.None).ConfigureAwait(false);
+                    await SendAsync(connectMsg, CancellationToken.None).ConfigureAwait(OSAwait.Continue);
                     break;
                 }
                 catch (Exception e)
@@ -80,7 +80,7 @@ namespace SocketIOClient.Transport
                     if (i == 3)
                         OnError.TryInvoke(e);
                     else
-                        await Task.Delay(TimeSpan.FromMilliseconds(Math.Pow(2, i) * 100));
+                        await BackgroundTask.Delay(TimeSpan.FromMilliseconds(Math.Pow(2, i) * 100));
                 }
             }
         }
@@ -88,18 +88,18 @@ namespace SocketIOClient.Transport
         private void StartPing(CancellationToken cancellationToken)
         {
             // _logger.LogDebug($"[Ping] Interval: {OpenedMessage.PingInterval}");
-            Task.Factory.StartNew(async () =>
+            BackgroundTask.Run(async () =>
             {
                 while (!cancellationToken.IsCancellationRequested)
                 {
-                    await Task.Delay(OpenedMessage.PingInterval, cancellationToken);
+                    await BackgroundTask.Delay(OpenedMessage.PingInterval, cancellationToken);
                     try
                     {
                         var ping = new PingMessage();
                         // _logger.LogDebug($"[Ping] Sending");
                         using (var cts = new CancellationTokenSource(OpenedMessage.PingTimeout))
                         {
-                            await SendAsync(ping, cts.Token).ConfigureAwait(false);
+                            await SendAsync(ping, cts.Token).ConfigureAwait(OSAwait.Continue);
                         }
                         // _logger.LogDebug($"[Ping] Has been sent");
                         _pingTime = DateTime.Now;
@@ -112,7 +112,7 @@ namespace SocketIOClient.Transport
                         break;
                     }
                 }
-            }, TaskCreationOptions.LongRunning);
+            }, CancellationToken.None, longRunning: true);
         }
 
         public abstract Task ConnectAsync(Uri uri, CancellationToken cancellationToken);
@@ -154,7 +154,7 @@ namespace SocketIOClient.Transport
             }
             if (msg.Type == MessageType.Opened)
             {
-                await OpenAsync(msg as OpenedMessage).ConfigureAwait(false);
+                await OpenAsync(msg as OpenedMessage).ConfigureAwait(OSAwait.Continue);
             }
 
             if (Options.EIO == EngineIO.V3)
@@ -164,7 +164,7 @@ namespace SocketIOClient.Transport
                     int ms = 0;
                     while (OpenedMessage is null)
                     {
-                        await Task.Delay(10);
+                        await BackgroundTask.Delay(10);
                         ms += 10;
                         if (ms > Options.ConnectionTimeout.TotalMilliseconds)
                         {
@@ -203,7 +203,7 @@ namespace SocketIOClient.Transport
                 _pingTime = DateTime.Now;
                 try
                 {
-                    await SendAsync(new PongMessage(), CancellationToken.None).ConfigureAwait(false);
+                    await SendAsync(new PongMessage(), CancellationToken.None).ConfigureAwait(OSAwait.Continue);
                     OnReceived.TryInvoke(new PongMessage
                     {
                         EIO = Options.EIO,

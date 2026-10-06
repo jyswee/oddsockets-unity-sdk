@@ -50,13 +50,13 @@ namespace SocketIOClient.Transport.WebSockets
                 byte[] subBuffer = new byte[length];
                 Buffer.BlockCopy(bytes, offset, subBuffer, 0, subBuffer.Length);
                 bool endOfMessage = pages - 1 == i;
-                await _ws.SendAsync(subBuffer, type, endOfMessage, cancellationToken).ConfigureAwait(false);
+                await _ws.SendAsync(subBuffer, type, endOfMessage, cancellationToken).ConfigureAwait(OSAwait.Continue);
             }
         }
 
         private void Listen(CancellationToken cancellationToken)
         {
-            Task.Factory.StartNew(async () =>
+            BackgroundTask.Run(async () =>
             {
                 while (!cancellationToken.IsCancellationRequested)
                 {
@@ -68,7 +68,7 @@ namespace SocketIOClient.Transport.WebSockets
                     {
                         try
                         {
-                            result = await _ws.ReceiveAsync(_receiveChunkSize, cancellationToken).ConfigureAwait(false);
+                            result = await _ws.ReceiveAsync(_receiveChunkSize, cancellationToken).ConfigureAwait(OSAwait.Continue);
 
                             // resize
                             if (binary.Length - count < result.Count)
@@ -143,7 +143,7 @@ namespace SocketIOClient.Transport.WebSockets
             _dirty = true;
             try
             {
-                await _ws.ConnectAsync(uri, cancellationToken).ConfigureAwait(false);
+                await _ws.ConnectAsync(uri, cancellationToken).ConfigureAwait(OSAwait.Continue);
             }
             catch (Exception e)
             {
@@ -154,14 +154,14 @@ namespace SocketIOClient.Transport.WebSockets
 
         public override async Task DisconnectAsync(CancellationToken cancellationToken)
         {
-            await _ws.DisconnectAsync(cancellationToken).ConfigureAwait(false);
+            await _ws.DisconnectAsync(cancellationToken).ConfigureAwait(OSAwait.Continue);
         }
 
         public override async Task SendAsync(Payload payload, CancellationToken cancellationToken)
         {
             try
             {
-                await _sendLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+                await _sendLock.WaitAsync(cancellationToken).ConfigureAwait(OSAwait.Continue);
                 if (!string.IsNullOrEmpty(payload.Text))
                 {
                     byte[] bytes = Encoding.UTF8.GetBytes(payload.Text);
@@ -174,7 +174,7 @@ namespace SocketIOClient.Transport.WebSockets
                 {
                     foreach (var item in payload.Bytes)
                     {
-                        await SendAsync(TransportMessageType.Binary, item, cancellationToken).ConfigureAwait(false);
+                        await SendAsync(TransportMessageType.Binary, item, cancellationToken).ConfigureAwait(OSAwait.Continue);
 #if DEBUG
                         Debug.WriteLine($"[WebSocket⬆] {Convert.ToBase64String(item)}");
 #endif
@@ -191,7 +191,7 @@ namespace SocketIOClient.Transport.WebSockets
         {
             try
             {
-                await _sendLock.WaitAsync().ConfigureAwait(false);
+                await _sendLock.WaitAsync().ConfigureAwait(OSAwait.Continue);
                 _sendChunkSize = size;
             }
             finally
@@ -204,7 +204,7 @@ namespace SocketIOClient.Transport.WebSockets
         {
             try
             {
-                await _sendLock.WaitAsync().ConfigureAwait(false);
+                await _sendLock.WaitAsync().ConfigureAwait(OSAwait.Continue);
                 _sendChunkSize = size;
             }
             finally

@@ -39,29 +39,29 @@ namespace SocketIOClient.Transport.Http
         public async Task GetAsync(string uri, CancellationToken cancellationToken)
         {
             var req = new HttpRequestMessage(HttpMethod.Get, AppendRandom(uri));
-            var resMsg = await HttpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
+            var resMsg = await HttpClient.SendAsync(req, cancellationToken).ConfigureAwait(OSAwait.Continue);
             if (!resMsg.IsSuccessStatusCode)
             {
                 throw new HttpRequestException($"Response status code does not indicate success: {resMsg.StatusCode}");
             }
-            await ProduceMessageAsync(resMsg).ConfigureAwait(false);
+            await ProduceMessageAsync(resMsg).ConfigureAwait(OSAwait.Continue);
         }
 
         public async Task SendAsync(HttpRequestMessage req, CancellationToken cancellationToken)
         {
-            var resMsg = await HttpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
+            var resMsg = await HttpClient.SendAsync(req, cancellationToken).ConfigureAwait(OSAwait.Continue);
             if (!resMsg.IsSuccessStatusCode)
             {
                 throw new HttpRequestException($"Response status code does not indicate success: {resMsg.StatusCode}");
             }
-            await ProduceMessageAsync(resMsg).ConfigureAwait(false);
+            await ProduceMessageAsync(resMsg).ConfigureAwait(OSAwait.Continue);
         }
 
         public virtual async Task PostAsync(string uri, string content, CancellationToken cancellationToken)
         {
             var httpContent = new StringContent(content);
-            var resMsg = await HttpClient.PostAsync(AppendRandom(uri), httpContent, cancellationToken).ConfigureAwait(false);
-            await ProduceMessageAsync(resMsg).ConfigureAwait(false);
+            var resMsg = await HttpClient.PostAsync(AppendRandom(uri), httpContent, cancellationToken).ConfigureAwait(OSAwait.Continue);
+            await ProduceMessageAsync(resMsg).ConfigureAwait(OSAwait.Continue);
         }
 
         public abstract Task PostAsync(string uri, IEnumerable<byte[]> bytes, CancellationToken cancellationToken);
@@ -70,12 +70,12 @@ namespace SocketIOClient.Transport.Http
         {
             if (resMsg.Content.Headers.ContentType.MediaType == "application/octet-stream")
             {
-                byte[] bytes = await resMsg.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
+                byte[] bytes = await resMsg.Content.ReadAsByteArrayAsync().ConfigureAwait(OSAwait.Continue);
                 await ProduceBytes(bytes);
             }
             else
             {
-                string text = await resMsg.Content.ReadAsStringAsync().ConfigureAwait(false);
+                string text = await resMsg.Content.ReadAsStringAsync().ConfigureAwait(OSAwait.Continue);
                 await ProduceText(text);
             }
         }

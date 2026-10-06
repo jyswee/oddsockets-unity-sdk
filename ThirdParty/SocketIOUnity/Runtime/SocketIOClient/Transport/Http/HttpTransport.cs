@@ -41,7 +41,7 @@ namespace SocketIOClient.Transport.Http
                     // }
                     try
                     {
-                        await _pollingHandler.GetAsync(_httpUri, CancellationToken.None).ConfigureAwait(false);
+                        await _pollingHandler.GetAsync(_httpUri, CancellationToken.None).ConfigureAwait(OSAwait.Continue);
                     }
                     catch (Exception e)
                     {
@@ -67,7 +67,7 @@ namespace SocketIOClient.Transport.Http
 
             try
             {
-                await _pollingHandler.SendAsync(req, cancellationToken).ConfigureAwait(false);
+                await _pollingHandler.SendAsync(req, cancellationToken).ConfigureAwait(OSAwait.Continue);
             }
             catch (Exception e)
             {
@@ -112,7 +112,7 @@ namespace SocketIOClient.Transport.Http
         {
             try
             {
-                await _sendLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+                await _sendLock.WaitAsync(cancellationToken).ConfigureAwait(OSAwait.Continue);
                 if (!string.IsNullOrEmpty(payload.Text))
                 {
                     await _pollingHandler.PostAsync(_httpUri, payload.Text, cancellationToken);
