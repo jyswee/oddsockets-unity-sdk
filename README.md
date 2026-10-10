@@ -30,6 +30,29 @@ In `Window > Package Manager > + > Add package from git URL`:
 https://github.com/jyswee/oddsockets-unity-sdk.git
 ```
 
+### Verify the install (important when upgrading)
+
+A green compile does **not** prove you are on the version you think you are.
+Two Unity package-resolution behaviours can silently pin you to a stale copy:
+
+- An **embedded package** (a folder at `Packages/com.oddsockets.unity/`)
+  silently overrides a `manifest.json` dependency of the same name. The git
+  dependency is ignored with no warning.
+- Renaming that folder with a trailing `~` does **not** hide it from package
+  resolution — `packages-lock.json` will still resolve `"source": "embedded"`.
+  The folder must be moved out of `Packages/` entirely and the stale lock
+  entry removed.
+
+After installing or upgrading, verify both of these:
+
+1. `Packages/packages-lock.json` shows `com.oddsockets.unity` with
+   `"source": "git"` (or `"registry"` for an Asset Store install) — **not**
+   `"source": "embedded"`.
+2. The resolved package contains the WebGL transport:
+   `ThirdParty/SocketIOUnity/Runtime/Plugins/WebGL/OddSocketsWebSocket.jslib`.
+   If it is missing you are on a pre-WebGL copy — the symptom is a WebGL
+   build whose connect hangs silently with no error callback.
+
 ## Quick Start
 
 ```csharp
